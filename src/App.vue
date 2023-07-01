@@ -5,8 +5,9 @@ import { useQuasar } from 'quasar';
 const $q = useQuasar();
 
 const originUrl = ref('');
-const useCustomLength = ref(false);
+const useCustomLength = ref('');
 const lengthUrl = ref(6);
+const customUrl = ref('');
 
 const showGeneratedUrl = ref(false);
 const generatedUrl = ref('');
@@ -17,36 +18,63 @@ const isURL = (value) => {
   );
 };
 
+const hitOnlyShort = async () => {
+  const req = {
+    origUrl: originUrl.value,
+    useCustomUrl: useCustomLength.value,
+    howMuch: parseInt(lengthUrl.value),
+  };
+  const res = await fetch(
+    'https://fix-shorten-production.up.railway.app/api/short',
+    {
+      method: 'POST',
+      mode: 'cors',
+      body: JSON.stringify(req),
+      headers: {
+        'Content-Type': 'application/json',
+        // 'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      cache: 'no-cache',
+    }
+  );
+  return res.json();
+};
+const hitShortWithKustom = async () => {
+  const req = {
+    origUrl: originUrl.value,
+    useCustomUrl: useCustomLength.value,
+    customUrl: customUrl.value,
+  };
+  const res = await fetch(
+    'https://fix-shorten-production.up.railway.app/api/short-custom',
+    {
+      method: 'POST',
+      mode: 'cors',
+      body: JSON.stringify(req),
+      headers: {
+        'Content-Type': 'application/json',
+        // 'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      cache: 'no-cache',
+    }
+  );
+  return res.json();
+};
+
 const onGenerated = async () => {
   $q.loading.show({
     message: 'Sedang mengenerate url, harap tunggu...',
   });
   showGeneratedUrl.value = false;
 
-  const req = {
-    origUrl: originUrl.value,
-    useCustomUrl: useCustomLength.value,
-    howMuch: parseInt(lengthUrl.value),
-  };
-
   try {
-    const res = await fetch(
-      'https://fix-shorten-production.up.railway.app/api/short',
-      {
-        method: 'POST',
-        mode: 'cors',
-        body: JSON.stringify(req),
-        headers: {
-          'Content-Type': 'application/json',
-          // 'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        cache: 'no-cache',
-      }
-    );
-    const _res = await res.json();
+    const res =
+      useCustomLength === 'Acak'
+        ? await hitOnlyShort()
+        : await hitShortWithKustom();
 
     showGeneratedUrl.value = true;
-    generatedUrl.value = _res.shortUrl;
+    generatedUrl.value = res.shortUrl;
     $q.loading.hide();
     $q.dialog({
       title: 'Hasil URL',
@@ -114,49 +142,55 @@ const onGenerated = async () => {
 
         <q-toolbar-title>Fix Shorten</q-toolbar-title>
 
-        <q-btn flat round dense icon="info" />
+        <q-btn flat round dense icon="info">
+          <q-tooltip> This website can help you to short your URL! </q-tooltip>
+        </q-btn>
       </q-toolbar>
     </q-header>
 
     <q-page-container>
-      <q-page class="q-pa-lg">
+      <q-page class="q-pa-xl">
         <q-form @submit.prevent="onGenerated" class="column">
           <div class="col">
-            <q-input
-              filled
-              bottom-slots
-              v-model="originUrl"
-              label="URL/Link Original"
-              dense
-              :rules="[
-                (val) => !!val || 'Wajib diisi!!',
-                (val) =>
-                  isURL(val) ||
-                  'Masukan URL yang valid seperti (https://google.com)',
-              ]"
-            >
-              <template v-slot:append>
-                <q-icon
-                  v-if="originUrl !== ''"
-                  name="close"
-                  @click="originUrl = ''"
-                  class="cursor-pointer"
-                />
-              </template>
+            <div class="row q-col-gutter-xs">
+              <div class="col-xs-12 col-sm-12 col-md-8">
+                <q-input
+                  filled
+                  bottom-slots
+                  v-model="originUrl"
+                  label="URL/Link Original"
+                  dense
+                  :rules="[
+                    (val) => !!val || 'Wajib diisi!!',
+                    (val) =>
+                      isURL(val) ||
+                      'Masukan URL yang valid seperti (https://google.com)',
+                  ]"
+                >
+                  <template v-slot:append>
+                    <q-icon
+                      v-if="originUrl !== ''"
+                      name="close"
+                      @click="originUrl = ''"
+                      class="cursor-pointer"
+                    />
+                  </template>
 
-              <template v-slot:hint> https://google.com </template>
-            </q-input>
+                  <template v-slot:hint> https://google.com </template>
+                </q-input>
+              </div>
+              <div class="col-xs-12 col-sm-12 col-md-4">
+                <q-select
+                  dense
+                  filled
+                  :options="['Kustom', 'Acak']"
+                  v-model="useCustomLength"
+                  label="Jenis Kustom"
+                />
+              </div>
+            </div>
           </div>
-          <div class="col">
-            <q-toggle
-              v-model="useCustomLength"
-              color="primary"
-              keep-color
-              label="Gunakan panjang kustom url?"
-              left-label
-            />
-          </div>
-          <div class="col" v-if="useCustomLength">
+          <div class="col q-pt-md" v-if="useCustomLength === 'Acak'">
             <q-input
               label="Panjang URL"
               v-model.number="lengthUrl"
@@ -169,6 +203,20 @@ const onGenerated = async () => {
               :rules="[
                 (val) =>
                   (val >= 6 && val <= 21) || 'Minimal 6 dan Maximal hanya 21',
+              ]"
+            />
+          </div>
+          <div class="col q-pt-md" v-if="useCustomLength === 'Kustom'">
+            <q-input
+              label="Kustom Url"
+              v-model="customUrl"
+              filled
+              style="max-width: 500px"
+              dense
+              :rules="[
+                (val) =>
+                  (val.length >= 3 && val.length <= 21) ||
+                  'Minimal 3 Karakter dan Maximal hanya 21 Karakter',
               ]"
             />
           </div>
